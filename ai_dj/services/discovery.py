@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 from ai_dj.services.spotify_client import SpotifyClient, SpotifyTrack
 
@@ -27,12 +27,12 @@ class DiscoveredTrack:
     duration_sec: int = 0
     genre: str = ""
     language: str = "english"
-    release_date: Optional[str] = None
+    release_date: str | None = None
     popularity: int = 50
     explicit: bool = False
-    preview_url: Optional[str] = None
+    preview_url: str | None = None
     external_url: str = ""
-    isrc: Optional[str] = None
+    isrc: str | None = None
     confidence: float = 0.5
     matched_keywords: list[str] = field(default_factory=list)
 
@@ -70,7 +70,7 @@ class DiscoveryService:
 
     def __init__(
         self,
-        spotify_client: Optional[SpotifyClient] = None,
+        spotify_client: SpotifyClient | None = None,
     ):
         self.spotify = spotify_client
         self._discovered_cache: dict[str, list[DiscoveredTrack]] = {}
@@ -203,7 +203,7 @@ class DiscoveryService:
 
         return min(1.0, score)
 
-    def get_cached_discovery(self, station_id: str) -> Optional[list[DiscoveredTrack]]:
+    def get_cached_discovery(self, station_id: str) -> list[DiscoveredTrack] | None:
         """Get cached discovery results if not expired."""
         if station_id in self._cache_ttl:
             if time.time() < self._cache_ttl[station_id]:

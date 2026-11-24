@@ -5,16 +5,17 @@ Station sends only: station, current_track, recent_history (last 5)
 AI DJ auto-decides: local cached song OR new song from Spotify
 """
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
-from datetime import datetime
 import logging
+from datetime import datetime
 from pathlib import Path
+from typing import Any
 
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
+
+from ai_dj.analysis.analyzer import AnalysisWorker, AudioAnalyzer
 from ai_dj.db.database import Database
-from ai_dj.recommendation.engine import RecommendationEngine, NVIDIAClient
-from ai_dj.analysis.analyzer import AudioAnalyzer, AnalysisWorker
+from ai_dj.recommendation.engine import RecommendationEngine
 
 logger = logging.getLogger(__name__)
 
@@ -29,14 +30,14 @@ class TrackContext(BaseModel):
     artist: str
     album: str = ""
     duration_sec: int = 0
-    played_at: Optional[str] = None
-    source: Optional[str] = None
+    played_at: str | None = None
+    source: str | None = None
 
 
 class RecommendationRequest(BaseModel):
     station: str = Field(..., pattern=r"^(pew-hits-english|pew-hits-desi)$")
     current_track: TrackContext
-    recent_history: List[TrackContext] = Field(default_factory=list, max_length=5)
+    recent_history: list[TrackContext] = Field(default_factory=list, max_length=5)
 
 
 class RecommendationResponse(BaseModel):
@@ -48,13 +49,13 @@ class RecommendationResponse(BaseModel):
     genre: str = ""
     language: str = "english"
     source: str  # "local" or "spotify"
-    source_track_id: Optional[str] = None
+    source_track_id: str | None = None
     score: float
     reason: str
     confidence: float
-    preview_url: Optional[str] = None
-    external_url: Optional[str] = None
-    release_date: Optional[str] = None
+    preview_url: str | None = None
+    external_url: str | None = None
+    release_date: str | None = None
 
 
 class TrackAnalysisRequest(BaseModel):
@@ -65,7 +66,7 @@ class TrackAnalysisRequest(BaseModel):
 class TrackAnalysisResponse(BaseModel):
     canonical_id: str
     status: str
-    features: Optional[Dict[str, Any]] = None
+    features: dict[str, Any] | None = None
     duration_ms: int
 
 
@@ -81,8 +82,8 @@ class StationStatusResponse(BaseModel):
     status: str
     tracks_analyzed: int
     cache_status: str
-    last_reconciliation: Optional[str] = None
-    profile: Dict[str, Any]
+    last_reconciliation: str | None = None
+    profile: dict[str, Any]
 
 
 class HealthResponse(BaseModel):
@@ -97,10 +98,10 @@ class HealthResponse(BaseModel):
 # ===== Dependencies ====
 
 # These will be set by main.py on startup
-_db: Optional[Database] = None
-_engines: Optional[dict[str, RecommendationEngine]] = None
-_analyzer: Optional[AudioAnalyzer] = None
-_worker: Optional[AnalysisWorker] = None
+_db: Database | None = None
+_engines: dict[str, RecommendationEngine] | None = None
+_analyzer: AudioAnalyzer | None = None
+_worker: AnalysisWorker | None = None
 _startup_time: datetime = datetime.now()
 
 

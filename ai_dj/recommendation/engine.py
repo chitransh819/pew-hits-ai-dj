@@ -12,20 +12,19 @@ import asyncio
 import json
 import logging
 import math
-import random
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 import yaml
 
 from ai_dj.db.database import Database
-from ai_dj.services.discovery import DiscoveryService, DiscoveredTrack
-from ai_dj.services.spotify_client import SpotifyClient, SpotifyTrack
+from ai_dj.services.discovery import DiscoveryService
+from ai_dj.services.spotify_client import SpotifyClient
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +86,7 @@ class TrackMetadata:
     track_id: str
     title: str
     artist: str
-    album: Optional[str] = None
+    album: str | None = None
     duration_ms: int = 0
     bpm: float = 120.0
     key: int = 0
@@ -100,14 +99,14 @@ class TrackMetadata:
     speechiness: float = 0.0
     genre: str = "pop"
     language: str = "english"
-    release_date: Optional[str] = None
+    release_date: str | None = None
     popularity: int = 50
     cache_status: str = "available"
-    embedding: Optional[list[float]] = None
+    embedding: list[float] | None = None
     source: str = "local"
-    source_track_id: Optional[str] = None
-    preview_url: Optional[str] = None
-    external_url: Optional[str] = None
+    source_track_id: str | None = None
+    preview_url: str | None = None
+    external_url: str | None = None
 
 
 @dataclass
@@ -289,9 +288,9 @@ class RecommendationEngine:
         self,
         db: Database,
         station_config: StationConfig,
-        discovery_service: Optional[DiscoveryService] = None,
-        spotify_client: Optional[SpotifyClient] = None,
-        nvidia_client: Optional[NVIDIAClient] = None,
+        discovery_service: DiscoveryService | None = None,
+        spotify_client: SpotifyClient | None = None,
+        nvidia_client: NVIDIAClient | None = None,
     ):
         self.db = db
         self.station = station_config
@@ -390,7 +389,7 @@ class RecommendationEngine:
         self,
         track: TrackMetadata,
         vibe: VibeProfile,
-        prev_track: Optional[TrackMetadata] = None,
+        prev_track: TrackMetadata | None = None,
     ) -> float:
         if prev_track is None:
             return 0.5
@@ -431,7 +430,7 @@ class RecommendationEngine:
         self,
         track: TrackMetadata,
         vibe: VibeProfile,
-        prev_track: Optional[TrackMetadata] = None,
+        prev_track: TrackMetadata | None = None,
     ) -> dict[str, float]:
         return {
             "mood": self.score_mood(track, vibe),
@@ -458,7 +457,7 @@ class RecommendationEngine:
         track: TrackMetadata,
         scores: dict[str, float],
         vibe: VibeProfile,
-        prev_track: Optional[TrackMetadata] = None,
+        prev_track: TrackMetadata | None = None,
     ) -> str:
         parts = []
         sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
@@ -496,7 +495,7 @@ class RecommendationEngine:
     def validate_transition(
         self,
         track: TrackMetadata,
-        prev_track: Optional[TrackMetadata] = None,
+        prev_track: TrackMetadata | None = None,
     ) -> tuple[bool, str]:
         if prev_track is None:
             return True, "First track, no transition needed"
@@ -627,7 +626,7 @@ class RecommendationEngine:
 
         return vibe
 
-    def _build_prev_track(self, current_track: dict) -> Optional[TrackMetadata]:
+    def _build_prev_track(self, current_track: dict) -> TrackMetadata | None:
         """Build previous track metadata from current track context."""
         if not current_track:
             return None
@@ -647,7 +646,7 @@ class RecommendationEngine:
         self,
         candidates: list[Candidate],
         k: int,
-        prev_track: Optional[TrackMetadata] = None,
+        prev_track: TrackMetadata | None = None,
     ) -> list[Candidate]:
         """Select top-K candidates ensuring artist/genre diversity."""
         if not candidates:
@@ -795,9 +794,9 @@ class RecommendationEngine:
 async def create_engine_from_config(
     station_config_path: Path,
     db: Database,
-    discovery_service: Optional[DiscoveryService] = None,
-    spotify_client: Optional[SpotifyClient] = None,
-    nvidia_api_key: Optional[str] = None,
+    discovery_service: DiscoveryService | None = None,
+    spotify_client: SpotifyClient | None = None,
+    nvidia_api_key: str | None = None,
 ) -> RecommendationEngine:
     """Factory function to create engine from config file."""
     station = StationConfig.from_yaml(station_config_path)

@@ -3,12 +3,13 @@ Database layer for AI DJ Service
 SQLite with async support via aiosqlite
 """
 
-import aiosqlite
 import json
 import logging
-from pathlib import Path
-from typing import Optional, List, Dict, Any
 from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+import aiosqlite
 
 logger = logging.getLogger(__name__)
 
@@ -102,18 +103,19 @@ class Database:
         duration_sec: int = 0,
         language: str = "english",
         genre: str = "",
-        cache_filename: Optional[str] = None,
+        cache_filename: str | None = None,
     ):
         async with aiosqlite.connect(self.db_path) as conn:
             await conn.execute(
                 """INSERT OR REPLACE INTO track_identity
                    (canonical_id, source, title, artist, album, duration_sec, language, genre, cache_filename, added_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (canonical_id, source, title, artist, album, duration_sec, language, genre, cache_filename, datetime.utcnow().isoformat()),
+                (canonical_id, source, title, artist, album, duration_sec,
+                language, genre, cache_filename, datetime.utcnow().isoformat()),
             )
             await conn.commit()
 
-    async def upsert_track_features(self, canonical_id: str, features: Dict[str, Any]):
+    async def upsert_track_features(self, canonical_id: str, features: dict[str, Any]):
         async with aiosqlite.connect(self.db_path) as conn:
             await conn.execute(
                 """INSERT OR REPLACE INTO track_features
@@ -147,7 +149,7 @@ class Database:
             )
             await conn.commit()
 
-    async def get_track_features(self, canonical_id: str) -> Optional[Dict[str, Any]]:
+    async def get_track_features(self, canonical_id: str) -> dict[str, Any] | None:
         async with aiosqlite.connect(self.db_path) as conn:
             conn.row_factory = aiosqlite.Row
             cursor = await conn.execute(
@@ -158,7 +160,7 @@ class Database:
                 return None
             return dict(row)
 
-    async def get_all_tracks(self) -> List[Dict[str, Any]]:
+    async def get_all_tracks(self) -> list[dict[str, Any]]:
         """Get all tracks with identity and features joined."""
         async with aiosqlite.connect(self.db_path) as conn:
             conn.row_factory = aiosqlite.Row
@@ -189,7 +191,7 @@ class Database:
             )
             await conn.commit()
 
-    async def upsert_station_profile(self, profile: Dict[str, Any]):
+    async def upsert_station_profile(self, profile: dict[str, Any]):
         async with aiosqlite.connect(self.db_path) as conn:
             await conn.execute(
                 """INSERT OR REPLACE INTO station_profiles
@@ -206,7 +208,7 @@ class Database:
             )
             await conn.commit()
 
-    async def get_station_profile(self, station_id: str) -> Optional[Dict[str, Any]]:
+    async def get_station_profile(self, station_id: str) -> dict[str, Any] | None:
         async with aiosqlite.connect(self.db_path) as conn:
             conn.row_factory = aiosqlite.Row
             cursor = await conn.execute(
@@ -223,7 +225,7 @@ class Database:
                     pass
             return result
 
-    async def get_stats(self) -> Dict[str, int]:
+    async def get_stats(self) -> dict[str, int]:
         async with aiosqlite.connect(self.db_path) as conn:
             cursor = await conn.execute("SELECT COUNT(*) as count FROM track_features")
             row = await cursor.fetchone()

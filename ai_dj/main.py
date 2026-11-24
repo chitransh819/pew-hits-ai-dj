@@ -99,10 +99,9 @@ async def lifespan(app: FastAPI):
     logger.info("Discovery service initialized")
 
     # 6. Initialize NVIDIA Client
-    nvidia_client = None
     nvidia_api_key = os.environ.get("NVIDIA_API_KEY")
     if nvidia_api_key:
-        nvidia_client = NVIDIAClient(
+        NVIDIAClient(
             api_key=nvidia_api_key,
             base_url=os.environ.get("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1"),
             rpm_limit=int(os.environ.get("NVIDIA_RPM_LIMIT", "40")),

@@ -5,10 +5,17 @@ Watches cache directories for file changes and performs periodic reconciliation
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import List, Set, Callable, Awaitable, Optional
+
+from watchdog.events import (
+    FileCreatedEvent,
+    FileDeletedEvent,
+    FileModifiedEvent,
+    FileMovedEvent,
+    FileSystemEventHandler,
+)
 from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler, FileCreatedEvent, FileDeletedEvent, FileModifiedEvent, FileMovedEvent
 
 from ai_dj.db.database import Database
 
@@ -81,7 +88,7 @@ class CacheSyncService:
     def __init__(
         self, 
         db: Database, 
-        cache_dirs: List[Path],
+        cache_dirs: list[Path],
         analyzer,
         worker,
         reconcile_interval: int = 300  # 5 minutes
@@ -172,7 +179,7 @@ class CacheSyncService:
             return
         
         # Get actual files in cache
-        actual_files: Set[str] = set()
+        actual_files: set[str] = set()
         for mp3 in cache_dir.glob("*.mp3"):
             canonical_id = f"track:cache:{self._sanitize_filename(mp3.stem)}"
             actual_files.add(canonical_id)
@@ -197,7 +204,7 @@ class CacheSyncService:
         logger.info(f"[CACHE_SYNC] Reconciled {cache_dir}: "
                    f"{len(actual_files)} files, {len(new_files)} new, {len(missing_files)} evicted")
     
-    async def _get_db_cache_ids(self) -> Set[str]:
+    async def _get_db_cache_ids(self) -> set[str]:
         """Get all canonical_ids from DB that are cache tracks"""
         # This would need a new DB method - for now use a query
         import aiosqlite
@@ -209,7 +216,7 @@ class CacheSyncService:
             rows = await cursor.fetchall()
             return {row["canonical_id"] for row in rows}
     
-    def _find_file_for_canonical(self, cache_dir: Path, canonical_id: str) -> Optional[Path]:
+    def _find_file_for_canonical(self, cache_dir: Path, canonical_id: str) -> Path | None:
         """Find the actual file for a canonical ID"""
         expected_name = canonical_id.replace("track:cache:", "") + ".mp3"
         file_path = cache_dir / expected_name
@@ -253,7 +260,7 @@ class CacheSyncService:
 
 async def create_cache_sync_service(
     db: Database,
-    cache_dirs: List[Path],
+    cache_dirs: list[Path],
     analyzer,
     worker,
     reconcile_interval: int = 300

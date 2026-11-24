@@ -1,0 +1,11 @@
+[project]
+name = "pew-hits-ai-dj"
+version = "1.0.0"
+
+[tool.ruff]
+line-length = 120
+select = ["E", "F"]
+ignore = []
+
+[tool.ruff.isort]
+known-first-party = ["ai_dj"]

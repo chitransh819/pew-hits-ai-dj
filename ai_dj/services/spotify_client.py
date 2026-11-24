@@ -7,7 +7,6 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any, Optional
 
 import httpx
 
@@ -24,11 +23,11 @@ class SpotifyTrack:
     duration_ms: int = 0
     popularity: int = 50
     explicit: bool = False
-    preview_url: Optional[str] = None  # 30-second preview max per Spotify terms
+    preview_url: str | None = None  # 30-second preview max per Spotify terms
     external_url: str = ""
     genres: list[str] = field(default_factory=list)
-    release_date: Optional[str] = None
-    isrc: Optional[str] = None
+    release_date: str | None = None
+    isrc: str | None = None
 
 
 class SpotifyClient:
@@ -57,10 +56,10 @@ class SpotifyClient:
         self.base_url = base_url.rstrip("/")
         self.token_url = token_url
         self.timeout_seconds = timeout_seconds
-        self._access_token: Optional[str] = None
+        self._access_token: str | None = None
         self._token_expires_at: float = 0
         self._lock = asyncio.Lock()
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:

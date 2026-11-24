@@ -6,14 +6,11 @@ Uses librosa (DSP), OpenL3 (embeddings), EfficientAT (embeddings), custom classi
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-import math
-import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import librosa
 import numpy as np
@@ -43,9 +40,9 @@ class AudioFeatures:
     
     # Classifiers
     genre_top: str = ""
-    genre_scores: Dict[str, float] = field(default_factory=dict)
-    mood_tags: List[str] = field(default_factory=list)
-    mood_scores: Dict[str, float] = field(default_factory=dict)
+    genre_scores: dict[str, float] = field(default_factory=dict)
+    mood_tags: list[str] = field(default_factory=list)
+    mood_scores: dict[str, float] = field(default_factory=dict)
     danceability: float = 0.0
     energy: float = 0.0
     valence: float = 0.0
@@ -77,9 +74,9 @@ class AudioAnalyzer:
         self.max_workers = max_workers
         
         # Models (lazy loaded)
-        self._openl3_session: Optional[ort.InferenceSession] = None
-        self._efficientat_session: Optional[ort.InferenceSession] = None
-        self._classifiers: Dict[str, Any] = {}
+        self._openl3_session: ort.InferenceSession | None = None
+        self._efficientat_session: ort.InferenceSession | None = None
+        self._classifiers: dict[str, Any] = {}
         self._models_loaded = False
         
         # Model paths
@@ -100,7 +97,7 @@ class AudioAnalyzer:
             logger.error(f"Failed to load models: {e}")
             return False
     
-    def _load_openl3(self) -> Optional[ort.InferenceSession]:
+    def _load_openl3(self) -> ort.InferenceSession | None:
         """Load OpenL3 ONNX model"""
         if self._openl3_session is None:
             if not self.openl3_path.exists():
@@ -113,7 +110,7 @@ class AudioAnalyzer:
             logger.info("OpenL3 model loaded")
         return self._openl3_session
     
-    def _load_efficientat(self) -> Optional[ort.InferenceSession]:
+    def _load_efficientat(self) -> ort.InferenceSession | None:
         """Load EfficientAT ONNX model"""
         if self._efficientat_session is None:
             if not self.efficientat_path.exists():
@@ -144,7 +141,7 @@ class AudioAnalyzer:
         except Exception as e:
             logger.warning(f"Failed to load classifiers: {e}")
     
-    def analyze(self, file_path: Path) -> Optional[AudioFeatures]:
+    def analyze(self, file_path: Path) -> AudioFeatures | None:
         """
         Full analysis pipeline for a single track
         Returns AudioFeatures or None on failure
@@ -367,7 +364,7 @@ class AudioAnalyzer:
         features.valence = features.mood_scores.get("happy", 0.5)
         features.acousticness = features.mood_scores.get("acoustic", 0.5)
     
-    def to_dict(self, features: AudioFeatures) -> Dict[str, Any]:
+    def to_dict(self, features: AudioFeatures) -> dict[str, Any]:
         """Convert AudioFeatures to dictionary for database storage"""
         return {
             "bpm": features.bpm,
@@ -380,8 +377,12 @@ class AudioAnalyzer:
             "chroma": features.chroma.tolist() if len(features.chroma) > 0 else [],
             "key": features.key,
             "loudness_lufs": features.loudness_lufs,
-            "openl3_embedding": features.openl3_embedding.tobytes() if len(features.openl3_embedding) > 0 else b"",
-            "efficientat_embedding": features.efficientat_embedding.tobytes() if len(features.efficientat_embedding) > 0 else b"",
+            "openl3_embedding": features.openl3_embedding.tobytes()
+            if len(features.openl3_embedding) > 0
+            else b"",
+            "efficientat_embedding": features.efficientat_embedding.tobytes()
+            if len(features.efficientat_embedding) > 0
+            else b"",
             "genre_top": features.genre_top,
             "genre_scores": features.genre_scores,
             "mood_tags": features.mood_tags,
@@ -399,13 +400,13 @@ class AudioAnalyzer:
 class AnalysisWorker:
     """Background worker for incremental analysis"""
     
-    def __init__(self, analyzer: AudioAnalyzer, db, cache_dirs: List[Path]):
+    def __init__(self, analyzer: AudioAnalyzer, db, cache_dirs: list[Path]):
         self.analyzer = analyzer
         self.db = db
         self.cache_dirs = cache_dirs
         self._queue: asyncio.Queue = asyncio.Queue()
         self._running = False
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
     
     async def start(self):
         self._running = True
@@ -430,7 +431,7 @@ class AnalysisWorker:
                     self._queue.get(), timeout=1.0
                 )
                 await self._analyze_file(file_path, canonical_id, force)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
             except asyncio.CancelledError:
                 break
@@ -469,7 +470,7 @@ class AnalysisWorker:
 class StartupScanner:
     """Scans cache directories on startup for bulk analysis"""
     
-    def __init__(self, analyzer: AudioAnalyzer, db, cache_dirs: List[Path], worker: AnalysisWorker):
+    def __init__(self, analyzer: AudioAnalyzer, db, cache_dirs: list[Path], worker: AnalysisWorker):
         self.analyzer = analyzer
         self.db = db
         self.cache_dirs = cache_dirs
