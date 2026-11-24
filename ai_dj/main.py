@@ -92,9 +92,6 @@ async def lifespan(app: FastAPI):
     # 5. Initialize Discovery Service
     _discovery = DiscoveryService(
         spotify_client=spotify_client,
-        youtube_api_key=os.environ.get("YOUTUBE_API_KEY"),
-        jiosaavn_base_url=os.environ.get("JIOSAAVN_BASE_URL"),
-        free_music_api_key=os.environ.get("FREE_MUSIC_API_KEY"),
     )
     logger.info("Discovery service initialized")
 
