@@ -81,8 +81,12 @@ class AudioAnalyzer:
         self._models_loaded = False
         
         # Model paths (configurable via environment variables)
-        self.openl3_path = Path(os.environ.get("OPENL3_MODEL_PATH", str(self.models_dir / "openl3_music_mel256_emb512.onnx")))
-        self.efficientat_path = Path(os.environ.get("EFFICIENTAT_MODEL_PATH", str(self.models_dir / "efficientat_mn10_as.onnx")))
+        self.openl3_path = Path(
+            os.environ.get("OPENL3_MODEL_PATH", str(self.models_dir / "openl3_music_mel256_emb512.onnx"))
+        )
+        self.efficientat_path = Path(
+            os.environ.get("EFFICIENTAT_MODEL_PATH", str(self.models_dir / "efficientat_mn10_as.onnx"))
+        )
         self.classifier_dir = self.models_dir / "classifiers"
         
     def load_models(self) -> bool:
