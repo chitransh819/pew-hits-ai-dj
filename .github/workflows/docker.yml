@@ -80,7 +80,9 @@ jobs:
 
       - name: 🧪 Run tests
         run: |
-          PYTHONPATH=. python -m pytest tests/ -v || exit 1
+          python -m pytest tests/ -v || exit 1
+        env:
+          PYTHONPATH: ${{ github.workspace }}
 
   build:
     name: 🐳 Build & Push Docker Image
