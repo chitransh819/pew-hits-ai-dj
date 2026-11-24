@@ -6,7 +6,7 @@ Watches cache directories for file changes and performs periodic reconciliation
 import asyncio
 import logging
 from pathlib import Path
-from typing import List, Set, Callable, Awaitable
+from typing import List, Set, Callable, Awaitable, Optional
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileCreatedEvent, FileDeletedEvent, FileModifiedEvent, FileMovedEvent
 
