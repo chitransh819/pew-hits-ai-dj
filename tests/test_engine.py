@@ -7,7 +7,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import sys
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Project root is automatically in sys.path when running from repo root
+# sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ai_dj.recommendation.engine import (
     Candidate,
