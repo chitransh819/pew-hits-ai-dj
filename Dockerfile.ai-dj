@@ -24,9 +24,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Install PyTorch CPU (ARM64 compatible)
-RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu \
-    torch==2.2.0 torchaudio==2.2.0
+# Install PyTorch CPU (ARM64 compatible - from PyPI)
+RUN pip install --no-cache-dir torch==2.2.0 torchaudio==2.2.0
 
 # Final stage
 FROM python:3.11-slim-bookworm
