@@ -21,6 +21,7 @@ class AIDJClient:
         self.base_url = getattr(config, "AI_DJ_URL", "http://ai-dj:8000/api/v1")
         self.timeout = getattr(config, "AI_DJ_TIMEOUT", 2.0)
         self.enabled = getattr(config, "AI_DJ_ENABLED", True)
+        self.api_key = getattr(config, "AI_DJ_API_KEY", None)
         self.client = httpx.AsyncClient(timeout=self.timeout)
         self._station_name = self._get_station_name()
     
@@ -98,9 +99,13 @@ class AIDJClient:
         }
         
         try:
+            headers = {}
+            if self.api_key:
+                headers["X-API-Key"] = self.api_key
             response = await self.client.post(
                 f"{self.base_url}/recommendations/next",
                 json=payload,
+                headers=headers,
             )
             response.raise_for_status()
             return response.json()

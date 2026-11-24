@@ -12,8 +12,9 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 import uvicorn
 
 from ai_dj.db.database import Database
@@ -240,6 +241,22 @@ async def run_initial_analysis(analyzer: AudioAnalyzer, worker: AnalysisWorker,
     logger.info(f"[INITIAL_ANALYSIS] Queued {analyzed} new, skipped {skipped} unchanged")
 
 
+# API Key Middleware
+class APIKeyMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        # Allow health check and docs without auth
+        if request.url.path in ["/health", "/docs", "/openapi.json", "/redoc"]:
+            return await call_next(request)
+
+        api_key = request.headers.get("X-API-Key")
+        expected_key = os.environ.get("AI_DJ_API_KEY")
+
+        if expected_key and api_key != expected_key:
+            raise HTTPException(status_code=401, detail="Invalid API key")
+
+        return await call_next(request)
+
+
 # Create FastAPI app
 app = FastAPI(
     title="Pew Hits AI DJ",
@@ -259,6 +276,9 @@ app.add_middleware(
 
 # Include routes
 app.include_router(router)
+
+# Add API key middleware (after routes so it wraps everything)
+app.add_middleware(APIKeyMiddleware)
 
 
 # Signal handlers for graceful shutdown
