@@ -246,7 +246,7 @@ async def run_initial_analysis(analyzer: AudioAnalyzer, worker: AnalysisWorker,
 class APIKeyMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         # Allow health check and docs without auth
-        if request.url.path in ["/health", "/docs", "/openapi.json", "/redoc"]:
+        if request.url.path in ["/health", "/api/v1/health", "/docs", "/openapi.json", "/redoc"]:
             return await call_next(request)
 
         api_key = request.headers.get("X-API-Key")
