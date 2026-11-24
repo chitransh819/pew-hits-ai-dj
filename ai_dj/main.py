@@ -19,6 +19,8 @@ from ai_dj.db.database import Database
 from ai_dj.analysis.analyzer import AudioAnalyzer, AnalysisWorker
 from ai_dj.recommendation.engine import RecommendationEngine, NVIDIAClient
 from ai_dj.services.cache_sync import create_cache_sync_service
+from ai_dj.services.discovery import DiscoveryService
+from ai_dj.services.spotify_client import SpotifyClient
 from ai_dj.api.routes import router, set_dependencies
 
 # Configure logging
@@ -35,6 +37,8 @@ _engine: RecommendationEngine = None
 _analyzer: AudioAnalyzer = None
 _worker: AnalysisWorker = None
 _cache_sync = None
+_discovery: Optional[DiscoveryService] = None
+_spotify: Optional[SpotifyClient] = None
 
 
 @asynccontextmanager
@@ -69,7 +73,31 @@ async def lifespan(app: FastAPI):
     )
     logger.info("Audio analyzer initialized")
     
-    # 4. Initialize NVIDIA Client
+    # 4. Initialize Spotify Client (for music discovery metadata)
+    spotify_client = None
+    spotify_client_id = os.environ.get("SPOTIFY_CLIENT_ID")
+    spotify_client_secret = os.environ.get("SPOTIFY_CLIENT_SECRET")
+    if spotify_client_id and spotify_client_secret:
+        spotify_client = SpotifyClient(
+            client_id=spotify_client_id,
+            client_secret=spotify_client_secret,
+            base_url=os.environ.get("SPOTIFY_BASE_URL", "https://api.spotify.com/v1"),
+            timeout_seconds=int(os.environ.get("SPOTIFY_TIMEOUT", "10")),
+        )
+        logger.info("Spotify client initialized")
+    else:
+        logger.warning("SPOTIFY_CLIENT_ID/SECRET not set - Spotify discovery disabled")
+
+    # 5. Initialize Discovery Service
+    _discovery = DiscoveryService(
+        spotify_client=spotify_client,
+        youtube_api_key=os.environ.get("YOUTUBE_API_KEY"),
+        jiosaavn_base_url=os.environ.get("JIOSAAVN_BASE_URL"),
+        free_music_api_key=os.environ.get("FREE_MUSIC_API_KEY"),
+    )
+    logger.info("Discovery service initialized")
+
+    # 6. Initialize NVIDIA Client
     nvidia_client = None
     nvidia_api_key = os.environ.get("NVIDIA_API_KEY")
     if nvidia_api_key:
@@ -118,7 +146,7 @@ async def lifespan(app: FastAPI):
     logger.info("Initial cache analysis started in background")
     
     # 9. Set dependencies for routes
-    set_dependencies(_db, _engine, _analyzer, _worker)
+    set_dependencies(_db, _engine, _analyzer, _worker, discovery=_discovery, spotify=spotify_client)
     
     logger.info("=" * 60)
     logger.info("AI DJ Service ready!")
@@ -128,7 +156,10 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     logger.info("Shutting down AI DJ Service...")
-    
+
+    if _spotify:
+        await _spotify.close()
+
     if _cache_sync:
         await _cache_sync.stop()
     

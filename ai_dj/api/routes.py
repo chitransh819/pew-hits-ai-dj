@@ -12,6 +12,8 @@ import logging
 from ai_dj.db.database import Database
 from ai_dj.recommendation.engine import RecommendationEngine, NVIDIAClient
 from ai_dj.analysis.analyzer import AudioAnalyzer, AnalysisWorker
+from ai_dj.services.discovery import DiscoveryService, DiscoveredTrack, DiscoverySource
+from ai_dj.services.spotify_client import SpotifyClient
 
 logger = logging.getLogger(__name__)
 
@@ -89,13 +91,32 @@ class HealthResponse(BaseModel):
     db_connected: bool
 
 
-# ===== Dependencies =====
+# ===== Discovery Models =====
+
+class DiscoveryRequest(BaseModel):
+    station: str = Field(..., pattern=r"^(pew-hits-english|pew-hits-desi)$")
+    language: str = Field(default="english")
+    genres: list[str] = Field(default_factory=list)
+    mood_keywords: list[str] = Field(default_factory=list)
+    limit_per_source: int = Field(default=10, ge=1, le=50)
+
+
+class DiscoveryResponse(BaseModel):
+    station: str
+    total_found: int
+    tracks: list[dict[str, Any]]
+    sources_used: list[str]
+
+
+# ===== Dependencies ====
 
 # These will be set by main.py on startup
 _db: Optional[Database] = None
 _engine: Optional[RecommendationEngine] = None
 _analyzer: Optional[AudioAnalyzer] = None
 _worker: Optional[AnalysisWorker] = None
+_discovery: Optional[DiscoveryService] = None
+_spotify: Optional[SpotifyClient] = None
 _startup_time: datetime = datetime.now()
 
 
@@ -123,13 +144,29 @@ def get_worker() -> AnalysisWorker:
     return _worker
 
 
+def get_discovery() -> DiscoveryService:
+    if _discovery is None:
+        raise HTTPException(status_code=503, detail="Discovery service not initialized")
+    return _discovery
+
+
+def get_spotify() -> SpotifyClient:
+    if _spotify is None:
+        raise HTTPException(status_code=503, detail="Spotify client not initialized")
+    return _spotify
+
+
 def set_dependencies(db: Database, engine: RecommendationEngine, 
-                     analyzer: AudioAnalyzer, worker: AnalysisWorker):
-    global _db, _engine, _analyzer, _worker
+                     analyzer: AudioAnalyzer, worker: AnalysisWorker,
+                     discovery: Optional[DiscoveryService] = None,
+                     spotify: Optional[SpotifyClient] = None):
+    global _db, _engine, _analyzer, _worker, _discovery, _spotify
     _db = db
     _engine = engine
     _analyzer = analyzer
     _worker = worker
+    _discovery = discovery
+    _spotify = spotify
 
 
 # ===== Endpoints =====
@@ -259,7 +296,7 @@ async def health_check(
 ):
     """Health check endpoint"""
     stats = await db.get_stats()
-    
+
     return HealthResponse(
         status="healthy",
         version="1.0.0",
@@ -268,6 +305,58 @@ async def health_check(
         models_loaded=True,  # Would check actual model loading
         db_connected=True,
     )
+
+
+# ===== Discovery Endpoints =====
+
+@router.post("/discovery/new", response_model=DiscoveryResponse)
+async def discover_new_songs(
+    request: DiscoveryRequest,
+    discovery: DiscoveryService = Depends(get_discovery),
+):
+    """Discover new song metadata from Spotify, YouTube, JioSaavn, and free sources.
+    Returns metadata only - no audio download. Station handles download via existing fallback chain."""
+    try:
+        tracks = await discovery.discover_new_songs(
+            station_id=request.station,
+            language=request.language,
+            genres=request.genres,
+            mood_keywords=request.mood_keywords,
+            limit_per_source=request.limit_per_source,
+        )
+
+        # Cache results
+        discovery.cache_discovery(request.station, tracks)
+
+        sources_used = list(set(t.source.value for t in tracks))
+
+        return DiscoveryResponse(
+            station=request.station,
+            total_found=len(tracks),
+            tracks=[t.to_dict() for t in tracks],
+            sources_used=sources_used,
+        )
+    except Exception as e:
+        logger.error(f"Discovery error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/discovery/cached/{station}")
+async def get_cached_discovery(
+    station: str,
+    discovery: DiscoveryService = Depends(get_discovery),
+):
+    """Get previously cached discovery results for a station."""
+    if station not in ("pew-hits-english", "pew-hits-desi"):
+        raise HTTPException(status_code=400, detail="Invalid station")
+    tracks = discovery.get_cached_discovery(station)
+    if tracks is None:
+        return {"station": station, "cached": False, "tracks": []}
+    return {
+        "station": station,
+        "cached": True,
+        "tracks": [t.to_dict() for t in tracks],
+    }
 
 
 from pathlib import Path
