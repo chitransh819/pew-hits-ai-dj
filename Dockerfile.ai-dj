@@ -1,36 +1,8 @@
 # Dockerfile.ai-dj
 # AI DJ Service for Pew Hits Radio
-# Builds on python:3.11-slim-bookworm (ARM64 compatible)
-
-FROM python:3.11-slim-bookworm AS builder
-
-# Install system dependencies for audio processing
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg \
-    libsndfile1 \
-    libmagic1 \
-    gcc \
-    g++ \
-    python3-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Set working directory
-WORKDIR /app
-
-# Copy requirements.txt for better caching
-COPY requirements.txt .
-
-# Install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
-
-# Install PyTorch CPU (ARM64 compatible - from PyPI)
-RUN pip install --no-cache-dir torch==2.2.0 torchaudio==2.2.0
-
-# Final stage
 FROM python:3.11-slim-bookworm
 
-# Install runtime dependencies
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     libsndfile1 \
@@ -44,9 +16,12 @@ RUN groupadd -r aiuser && useradd -r -g aiuser aiuser
 # Set working directory
 WORKDIR /app
 
-# Copy installed packages from builder
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
+# Copy requirements first for caching
+COPY requirements.txt .
+
+# Install Python dependencies (PyTorch from PyPI for ARM64)
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY . /app/
@@ -70,10 +45,6 @@ ENV MODELS_DIR=/models
 
 # Expose port
 EXPOSE 8000
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=300s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
 
 # Entry point
 CMD ["python", "-m", "ai_dj.main"]
