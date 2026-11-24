@@ -1,0 +1,93 @@
+# Dockerfile.ai-dj
+# AI DJ Service for Pew Hits Radio
+# Builds on python:3.11-slim-bookworm (ARM64 compatible)
+
+FROM python:3.11-slim-bookworm AS builder
+
+# Install system dependencies for audio processing
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    libsndfile1 \
+    libmagic1 \
+    gcc \
+    g++ \
+    python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements first for better caching
+COPY tech-stack.yaml /tmp/tech-stack.yaml
+
+# Generate requirements.txt from tech-stack.yaml
+RUN python3 -c "
+import yaml
+with open('/tmp/tech-stack.yaml') as f:
+    data = yaml.safe_load(f)
+deps = data.get('dependencies', {})
+for pkg, ver in deps.items():
+    if ver:
+        print(f'{pkg}=={ver}')
+    else:
+        print(pkg)
+" > requirements.txt
+
+# Install Python dependencies
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Install PyTorch CPU (ARM64 compatible)
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu \
+    torch==2.2.0 torchaudio==2.2.0
+
+# Final stage
+FROM python:3.11-slim-bookworm
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    libsndfile1 \
+    libmagic1 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN groupadd -r aiuser && useradd -r -g aiuser aiuser
+
+# Set working directory
+WORKDIR /app
+
+# Copy installed packages from builder
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Copy application code
+COPY . /app/
+
+# Create directories
+RUN mkdir -p /data /models /config /cache/english /cache/desi && \
+    chown -R aiuser:aiuser /data /models /config /cache /app
+
+# Switch to non-root user
+USER aiuser
+
+# Environment variables
+ENV PYTHONUNBUFFERED=1
+ENV LOG_LEVEL=INFO
+ENV AI_DJ_HOST=0.0.0.0
+ENV AI_DJ_PORT=8000
+ENV CACHE_DIR_ENGLISH=/cache/english
+ENV CACHE_DIR_DESI=/cache/desi
+ENV DB_PATH=/data/ai_dj.db
+ENV MODELS_DIR=/models
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=300s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Entry point
+CMD ["python", "-m", "ai_dj.main"]

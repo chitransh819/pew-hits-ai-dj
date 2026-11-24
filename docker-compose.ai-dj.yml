@@ -1,0 +1,116 @@
+# docker-compose.ai-dj.yml
+# AI DJ Service for Pew Hits Radio
+# Run alongside existing pew-hits containers
+
+version: "3.9"
+
+services:
+  ai-dj:
+    build:
+      context: .
+      dockerfile: Dockerfile.ai-dj
+    container_name: pew-hits-ai-dj
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 3G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=INFO
+      - AI_DJ_HOST=0.0.0.0
+      - AI_DJ_PORT=8000
+      - CACHE_DIR_ENGLISH=/cache/english
+      - CACHE_DIR_DESI=/cache/desi
+      - DB_PATH=/data/ai_dj.db
+      - MODELS_DIR=/models
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY}
+      - NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
+      - NVIDIA_RPM_LIMIT=40
+      - STATION_ENGLISH_PROFILE=/config/station_english.yaml
+      - STATION_DESI_PROFILE=/config/station_desi.yaml
+      - ANALYSIS_WORKERS=4
+      - ANALYSIS_CHUNK_DURATION=30
+    volumes:
+      - ./pew-hits/Cache:/cache/english:ro
+      - ./pew-hits-desi/Cache:/cache/desi:ro
+      - ./data:/data
+      - ./models:/models:ro
+      - ./config:/config:ro
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 300s
+    networks:
+      - pew-hits-network
+
+# Resource limits for EXISTING containers (apply to your existing docker-compose.yml)
+# Copy these deploy sections into your existing service definitions:
+
+# pew-hits-radio:
+#   deploy:
+#     resources:
+#       limits:
+#         cpus: '0.5'
+#         memory: 1G
+#       reservations:
+#         cpus: '0.25'
+#         memory: 512M
+
+# pew-hits-desi-radio:
+#   deploy:
+#     resources:
+#       limits:
+#         cpus: '0.5'
+#         memory: 1G
+#       reservations:
+#         cpus: '0.25'
+#         memory: 512M
+
+# liquidsoap-relay:
+#   deploy:
+#     resources:
+#       limits:
+#         cpus: '0.5'
+#         memory: 512M
+
+# shoutcast-dnas:
+#   deploy:
+#     resources:
+#       limits:
+#         cpus: '0.25'
+#         memory: 128M
+
+# icecast:
+#   deploy:
+#     resources:
+#       limits:
+#         cpus: '0.1'
+#         memory: 64M
+
+# hermes:
+#   deploy:
+#     resources:
+#       limits:
+#         cpus: '1.0'
+#         memory: 2G
+#       reservations:
+#         cpus: '0.5'
+#         memory: 1G
+
+networks:
+  pew-hits-network:
+    external: true
+    name: pew-hits-network
+
+volumes:
+  ai_dj_data:
+  ai_dj_models:

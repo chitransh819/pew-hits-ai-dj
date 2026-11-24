@@ -1,0 +1,40 @@
+station_id: "english_hits"
+name: "English Hits Station"
+language: "english"
+target_audience: "global"
+weights:
+  mood: 0.20
+  energy: 0.15
+  tempo: 0.10
+  genre: 0.15
+  language: 0.05
+  artist: 0.10
+  transition: 0.10
+  semantic: 0.10
+  recency: 0.05
+transition_rules:
+  max_bpm_delta: 30
+  max_energy_delta: 0.3
+  max_key_distance: 5
+  allow_genre_shift: true
+  preferred_transitions:
+    - "verse_chorus"
+    - "energy_build"
+    - "mood_shift"
+filters:
+  allowed_languages: ["english"]
+  allowed_genres: ["pop", "rock", "hip-hop", "r&b", "electronic", "indie", "alternative"]
+  energy_range: [0.3, 0.9]
+  tempo_range: [70, 180]
+artist_cooldown_minutes: 30
+recent_history_exclusion_count: 20
+diversity:
+  max_same_artist_in_top_k: 2
+  max_same_genre_in_top_k: 3
+  min_unique_artists: 5
+nvidia_rerank:
+  enabled: true
+  model: "nvidia/nemotron-3.5-rerank-8b"
+  top_k_before_rerank: 50
+  rate_limit_rpm: 40
+  timeout_seconds: 10

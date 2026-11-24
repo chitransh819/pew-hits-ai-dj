@@ -1,0 +1,41 @@
+station_id: "desi_beats"
+name: "Desi Beats Station"
+language: "hindi"
+target_audience: "south_asian"
+weights:
+  mood: 0.15
+  energy: 0.15
+  tempo: 0.10
+  genre: 0.20
+  language: 0.15
+  artist: 0.10
+  transition: 0.05
+  semantic: 0.05
+  recency: 0.05
+transition_rules:
+  max_bpm_delta: 25
+  max_energy_delta: 0.25
+  max_key_distance: 4
+  allow_genre_shift: false
+  preferred_transitions:
+    - "raga_progression"
+    - "tala_cycle"
+    - "language_bridge"
+filters:
+  allowed_languages: ["hindi", "punjabi", "tamil", "telugu", "bengali", "gujarati", "marathi"]
+  allowed_genres: ["bollywood", "punjabi_pop", "tamil_cinema", "indie_hindi", "sufi", "classical_fusion", "desi_hip_hop"]
+  energy_range: [0.4, 0.95]
+  tempo_range: [80, 200]
+artist_cooldown_minutes: 20
+recent_history_exclusion_count: 15
+diversity:
+  max_same_artist_in_top_k: 2
+  max_same_genre_in_top_k: 3
+  min_unique_artists: 5
+  max_same_language_in_top_k: 4
+nvidia_rerank:
+  enabled: true
+  model: "nvidia/nemotron-3.5-rerank-8b"
+  top_k_before_rerank: 50
+  rate_limit_rpm: 40
+  timeout_seconds: 10
