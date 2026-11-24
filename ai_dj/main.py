@@ -10,7 +10,7 @@ import sys
 import os
 from pathlib import Path
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Optional, Dict
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
