@@ -10,9 +10,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user
-RUN groupadd -r aiuser && useradd -r -g aiuser aiuser
-
 # Set working directory
 WORKDIR /app
 
@@ -27,11 +24,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY . /app/
 
 # Create directories
-RUN mkdir -p /data /models /config /cache/english /cache/desi && \
-    chown -R aiuser:aiuser /data /models /config /cache /app
-
-# Switch to non-root user
-USER aiuser
+RUN mkdir -p /data /models /config /cache/english /cache/desi
 
 # Environment variables
 ENV PYTHONUNBUFFERED=1
