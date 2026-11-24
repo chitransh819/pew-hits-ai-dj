@@ -7,7 +7,7 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import List, Optional, Set
+from typing import List, Optional
 
 from watchdog.events import (
     FileCreatedEvent,
