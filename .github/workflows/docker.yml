@@ -8,7 +8,83 @@ on:
   workflow_dispatch:
 
 jobs:
+  checks:
+    name: 🔍 Code Checks & Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📦 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 📥 Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio ruff
+
+      - name: 🔍 Import check (catch missing imports like Optional)
+        run: |
+          python -c "
+          import ast, sys
+          files = [
+              'ai_dj/main.py',
+              'ai_dj/api/routes.py',
+              'ai_dj/db/database.py',
+              'ai_dj/services/cache_sync.py',
+              'ai_dj/services/discovery.py',
+              'ai_dj/services/spotify_client.py',
+              'ai_dj/recommendation/engine.py',
+              'ai_dj/analysis/analyzer.py',
+          ]
+          for f in files:
+              try:
+                  with open(f) as fh:
+                      ast.parse(fh.read())
+                  print(f'✅ {f}: syntax OK')
+              except SyntaxError as e:
+                  print(f'❌ {f}: SYNTAX ERROR: {e}')
+                  sys.exit(1)
+          print('✅ All files parse successfully')
+          "
+
+      - name: 📦 Import all modules
+        run: |
+          python -c "
+          modules = [
+              'ai_dj.db.database',
+              'ai_dj.services.cache_sync',
+              'ai_dj.services.discovery',
+              'ai_dj.services.spotify_client',
+              'ai_dj.recommendation.engine',
+              'ai_dj.analysis.analyzer',
+              'ai_dj.api.routes',
+              'ai_dj.main',
+          ]
+          for m in modules:
+              try:
+                  __import__(m)
+                  print(f'✅ {m}: imported OK')
+              except Exception as e:
+                  print(f'❌ {m}: IMPORT FAILED: {e}')
+                  exit(1)
+          print('✅ All modules import successfully')
+          "
+
+      - name: 🧹 Lint (ruff)
+        run: |
+          ruff check ai_dj/ || exit 1
+
+      - name: 🧪 Run tests
+        run: |
+          python -m pytest tests/ -v || exit 1
+
   build:
+    name: 🐳 Build & Push Docker Image
+    needs: checks
     runs-on: ubuntu-latest
     outputs:
       image_tag: ${{ steps.meta.outputs.tag }}
@@ -43,10 +119,11 @@ jobs:
 
       - name: ✅ Build Status
         run: |
-          echo "========================================"
+          echo "=========================================="
           echo "CI/CD Workflow Summary"
-          echo "========================================"
+          echo "=========================================="
           echo ""
+          echo "✅ CHECKS: Code checks & tests passed"
           echo "✅ BUILD: Docker image successfully built and pushed"
           echo "   Commit: ${GITHUB_SHA::8}"
           echo ""
@@ -64,20 +141,22 @@ jobs:
           echo "   - Integration adapter: ai_dj_adapter.py"
           echo "   - See PROJECT REQUIREMENTS Sections 11 & 12"
           echo ""
-          echo "========================================"
+          echo "=========================================="
 
   verify:
+    name: 📊 Verify Build
     needs: build
     runs-on: ubuntu-latest
     steps:
       - name: 📊 Verify Build
         run: |
-          echo "========================================"
+          echo "=========================================="
           echo "Workflow verification complete"
           echo "   Run: ${{ github.run_id }}"
           echo "   Commit: ${GITHUB_SHA::8}"
           echo ""
-          echo "✅ Build job completed successfully"
+          echo "✅ Checks job: Code checks & tests passed"
+          echo "✅ Build job: Docker image built and pushed"
           echo "   Image: ghcr.io/chitransh819/pew-hits-ai-dj:latest"
           echo ""
           echo "🚀 Manual deployment steps:"
@@ -89,17 +168,18 @@ jobs:
           echo "   - No automatic production deployment"
           echo "   - Manual approval required for station integration"
           echo "   - Session-only token usage (not persisted)"
-          echo "========================================"
+          echo "=========================================="
 
   note:
+    name: 📝 Security Notice
     needs: verify
     runs-on: ubuntu-latest
     steps:
       - name: 📝 Security Notice
         run: |
-          echo "========================================"
+          echo "=========================================="
           echo "🔒 Session-Only Token Usage"
-          echo "========================================"
+          echo "=========================================="
           echo ""
           echo "⚠️  This GitHub Actions run uses a session-only token"
           echo "   - NOT persisted in agent memory across sessions"
@@ -109,10 +189,11 @@ jobs:
           echo ""
           echo "✅ This workflow:"
           echo "   - Triggers on push to main branch"
-          echo "   - Builds and pushes Docker image to GHCR"
+          echo "   - Runs code checks & tests before building"
+          echo "   - Builds and pushes Docker image to GHCR (ARM64)"
           echo "   - Verifies successful build"
           echo "   - Provides deployment instructions"
           echo "   - Upholds project safety requirements"
           echo "   - No automatic production deployment"
           echo ""
-          echo "========================================"
+          echo "=========================================="
