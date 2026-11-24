@@ -1,0 +1,36 @@
+name: AI DJ CI/CD Debug
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📦 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🔍 Docker info
+        run: |
+          echo "=== Docker Version ==="
+          docker version
+          echo ""
+          echo "=== Docker Info ==="
+          docker info
+
+      - name: 🔑 Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: chitransh819
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🐳 Build only (no push)
+        run: |
+          docker build -t ghcr.io/chitransh819/pew-hits-ai-dj:test -f Dockerfile.ai-dj .
+
+      - name: 🚀 Push image
+        run: |
+          docker push ghcr.io/chitransh819/pew-hits-ai-dj:test
