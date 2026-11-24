@@ -18,7 +18,7 @@ import uvicorn
 
 from ai_dj.db.database import Database
 from ai_dj.analysis.analyzer import AudioAnalyzer, AnalysisWorker
-from ai_dj.recommendation.engine import RecommendationEngine, NVIDIAClient
+from ai_dj.recommendation.engine import RecommendationEngine, NVIDIAClient, create_engine_from_config
 from ai_dj.services.cache_sync import create_cache_sync_service
 from ai_dj.services.discovery import DiscoveryService
 from ai_dj.services.spotify_client import SpotifyClient
@@ -34,7 +34,7 @@ logger = logging.getLogger("ai_dj")
 
 # Global components
 _db: Database = None
-_engine: RecommendationEngine = None
+_engines: dict[str, RecommendationEngine] = {}
 _analyzer: AudioAnalyzer = None
 _worker: AnalysisWorker = None
 _cache_sync = None
@@ -45,7 +45,7 @@ _spotify: Optional[SpotifyClient] = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan management"""
-    global _db, _engine, _analyzer, _worker, _cache_sync
+    global _db, _engines, _analyzer, _worker, _cache_sync
     
     logger.info("=" * 60)
     logger.info("Starting Pew Hits AI DJ Service")
@@ -108,14 +108,23 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("NVIDIA_API_KEY not set - running in local-only mode")
     
-    # 5. Initialize Recommendation Engine
-    station_profiles = await load_station_profiles_from_db(_db)
-    _engine = RecommendationEngine(
-        db=_db,
-        station_profiles=station_profiles,
-        nvidia_client=nvidia_client,
-    )
-    logger.info("Recommendation engine initialized")
+    # 5. Initialize Recommendation Engines (one per station)
+    nvidia_api_key = os.environ.get("NVIDIA_API_KEY")
+    _engines = {}
+    for station_id, config_path in [
+        ("pew-hits-english", Path("/config/station_english.yaml")),
+        ("pew-hits-desi", Path("/config/station_desi.yaml")),
+    ]:
+        if config_path.exists():
+            _engines[station_id] = await create_engine_from_config(
+                station_config_path=config_path,
+                db=_db,
+                discovery_service=_discovery,
+                spotify_client=_spotify,
+                nvidia_api_key=nvidia_api_key,
+            )
+            logger.info(f"Recommendation engine initialized for {station_id}")
+    logger.info("Recommendation engines initialized")
     
     # 6. Initialize Analysis Worker
     cache_dirs = [
@@ -144,7 +153,7 @@ async def lifespan(app: FastAPI):
     logger.info("Initial cache analysis started in background")
     
     # 9. Set dependencies for routes
-    set_dependencies(_db, _engine, _analyzer, _worker, discovery=_discovery, spotify=spotify_client)
+    set_dependencies(_db, _engines, _analyzer, _worker)
     
     logger.info("=" * 60)
     logger.info("AI DJ Service ready!")

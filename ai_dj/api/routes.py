@@ -1,6 +1,8 @@
 """
 FastAPI Routes for AI DJ Service
-All REST API endpoints
+Single endpoint: POST /api/v1/recommendations/next
+Station sends only: station, current_track, recent_history (last 5)
+AI DJ auto-decides: local cached song OR new song from Spotify
 """
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
@@ -8,19 +10,18 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import logging
+from pathlib import Path
 
 from ai_dj.db.database import Database
 from ai_dj.recommendation.engine import RecommendationEngine, NVIDIAClient
 from ai_dj.analysis.analyzer import AudioAnalyzer, AnalysisWorker
-from ai_dj.services.discovery import DiscoveryService, DiscoveredTrack, DiscoverySource
-from ai_dj.services.spotify_client import SpotifyClient
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1")
 
 
-# ===== Pydantic Models =====
+# ===== Pydantic Models ====
 
 class TrackContext(BaseModel):
     canonical_id: str = Field(..., pattern=r"^track:(spotify|youtube|soundcloud|jiosaavn|cache):.+")
@@ -35,23 +36,25 @@ class TrackContext(BaseModel):
 class RecommendationRequest(BaseModel):
     station: str = Field(..., pattern=r"^(pew-hits-english|pew-hits-desi)$")
     current_track: TrackContext
-    recent_history: List[TrackContext] = Field(default_factory=list, max_length=10)
-    playable_track_ids: List[str] = Field(default_factory=list, max_length=5000)
-
-
-class CandidateResponse(BaseModel):
-    canonical_id: str
-    score: float
-    reason: str
-    metadata: Dict[str, Any]
+    recent_history: List[TrackContext] = Field(default_factory=list, max_length=5)
 
 
 class RecommendationResponse(BaseModel):
-    candidates: List[CandidateResponse]
-    explanation: str
+    canonical_id: str
+    title: str
+    artist: str
+    album: str = ""
+    duration_sec: int = 0
+    genre: str = ""
+    language: str = "english"
+    source: str  # "local" or "spotify"
+    source_track_id: Optional[str] = None
+    score: float
+    reason: str
     confidence: float
-    reasoning_source: str
-    latency_ms: int
+    preview_url: Optional[str] = None
+    external_url: Optional[str] = None
+    release_date: Optional[str] = None
 
 
 class TrackAnalysisRequest(BaseModel):
@@ -91,32 +94,13 @@ class HealthResponse(BaseModel):
     db_connected: bool
 
 
-# ===== Discovery Models =====
-
-class DiscoveryRequest(BaseModel):
-    station: str = Field(..., pattern=r"^(pew-hits-english|pew-hits-desi)$")
-    language: str = Field(default="english")
-    genres: list[str] = Field(default_factory=list)
-    mood_keywords: list[str] = Field(default_factory=list)
-    limit_per_source: int = Field(default=10, ge=1, le=50)
-
-
-class DiscoveryResponse(BaseModel):
-    station: str
-    total_found: int
-    tracks: list[dict[str, Any]]
-    sources_used: list[str]
-
-
 # ===== Dependencies ====
 
 # These will be set by main.py on startup
 _db: Optional[Database] = None
-_engine: Optional[RecommendationEngine] = None
+_engines: Optional[dict[str, RecommendationEngine]] = None
 _analyzer: Optional[AudioAnalyzer] = None
 _worker: Optional[AnalysisWorker] = None
-_discovery: Optional[DiscoveryService] = None
-_spotify: Optional[SpotifyClient] = None
 _startup_time: datetime = datetime.now()
 
 
@@ -126,10 +110,10 @@ def get_db() -> Database:
     return _db
 
 
-def get_engine() -> RecommendationEngine:
-    if _engine is None:
-        raise HTTPException(status_code=503, detail="Recommendation engine not initialized")
-    return _engine
+def get_engine(station: str) -> RecommendationEngine:
+    if _engines is None or station not in _engines:
+        raise HTTPException(status_code=503, detail=f"Recommendation engine for {station} not initialized")
+    return _engines[station]
 
 
 def get_analyzer() -> AudioAnalyzer:
@@ -144,46 +128,32 @@ def get_worker() -> AnalysisWorker:
     return _worker
 
 
-def get_discovery() -> DiscoveryService:
-    if _discovery is None:
-        raise HTTPException(status_code=503, detail="Discovery service not initialized")
-    return _discovery
-
-
-def get_spotify() -> SpotifyClient:
-    if _spotify is None:
-        raise HTTPException(status_code=503, detail="Spotify client not initialized")
-    return _spotify
-
-
-def set_dependencies(db: Database, engine: RecommendationEngine, 
-                     analyzer: AudioAnalyzer, worker: AnalysisWorker,
-                     discovery: Optional[DiscoveryService] = None,
-                     spotify: Optional[SpotifyClient] = None):
-    global _db, _engine, _analyzer, _worker, _discovery, _spotify
+def set_dependencies(db: Database, engines: dict[str, RecommendationEngine],
+                     analyzer: AudioAnalyzer, worker: AnalysisWorker):
+    global _db, _engines, _analyzer, _worker
     _db = db
-    _engine = engine
+    _engines = engines
     _analyzer = analyzer
     _worker = worker
-    _discovery = discovery
-    _spotify = spotify
 
 
-# ===== Endpoints =====
+# ===== Endpoints ====
 
 @router.post("/recommendations/next", response_model=RecommendationResponse)
 async def get_next_recommendation(
     request: RecommendationRequest,
-    engine: RecommendationEngine = Depends(get_engine),
 ):
-    """Get next track recommendation"""
+    """
+    Get next track recommendation.
+    Station sends: station, current_track, recent_history (last 5).
+    AI DJ auto-decides: local cached song OR new song from Spotify.
+    """
     try:
-        result = await engine.get_recommendations(
+        engine = get_engine(request.station)
+        result = await engine.get_next_track(
             station_id=request.station,
             current_track=request.current_track.model_dump(),
             recent_history=[h.model_dump() for h in request.recent_history],
-            playable_ids=request.playable_track_ids,
-            limit=10,
         )
         return RecommendationResponse(**result)
     except Exception as e:
@@ -202,19 +172,19 @@ async def analyze_track(
     """Analyze a new track (incremental)"""
     import time
     start = time.time()
-    
+
     file_path = Path(request.file_path)
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
-    
+
     # Generate canonical ID from file path
     canonical_id = f"track:cache:{file_path.stem}"
-    
+
     # Check if already analyzed and unchanged
     if not request.force:
         stat = file_path.stat()
         existing = await db.get_track_features(canonical_id)
-        if (existing and existing.get("file_mtime") == int(stat.st_mtime) 
+        if (existing and existing.get("file_mtime") == int(stat.st_mtime)
             and existing.get("file_size") == stat.st_size):
             return TrackAnalysisResponse(
                 canonical_id=canonical_id,
@@ -222,10 +192,10 @@ async def analyze_track(
                 features=existing,
                 duration_ms=int((time.time() - start) * 1000),
             )
-    
+
     # Run analysis in background
     background_tasks.add_task(worker.queue_file, file_path, canonical_id, request.force)
-    
+
     return TrackAnalysisResponse(
         canonical_id=canonical_id,
         status="queued",
@@ -242,7 +212,7 @@ async def update_history(
     """Update playback history"""
     if station not in ["pew-hits-english", "pew-hits-desi"]:
         raise HTTPException(status_code=400, detail="Invalid station")
-    
+
     try:
         await db.add_playback(
             station_id=station,
@@ -264,8 +234,6 @@ async def get_recommendation_history(
     db: Database = Depends(get_db),
 ):
     """Get recent recommendation history"""
-    # Implementation would query recommendation_history table
-    # For now return empty
     return {"station": station, "recommendations": []}
 
 
@@ -277,10 +245,10 @@ async def get_station_status(
     """Get station status and config"""
     if station not in ["pew-hits-english", "pew-hits-desi"]:
         raise HTTPException(status_code=400, detail="Invalid station")
-    
+
     profile = await db.get_station_profile(station)
     stats = await db.get_stats()
-    
+
     return StationStatusResponse(
         station=station,
         status="ready",
@@ -302,61 +270,6 @@ async def health_check(
         version="1.0.0",
         tracks_analyzed=stats.get("track_features", 0),
         uptime_seconds=int((datetime.now() - _startup_time).total_seconds()),
-        models_loaded=True,  # Would check actual model loading
+        models_loaded=True,
         db_connected=True,
     )
-
-
-# ===== Discovery Endpoints =====
-
-@router.post("/discovery/new", response_model=DiscoveryResponse)
-async def discover_new_songs(
-    request: DiscoveryRequest,
-    discovery: DiscoveryService = Depends(get_discovery),
-):
-    """Discover new song metadata from Spotify, YouTube, JioSaavn, and free sources.
-    Returns metadata only - no audio download. Station handles download via existing fallback chain."""
-    try:
-        tracks = await discovery.discover_new_songs(
-            station_id=request.station,
-            language=request.language,
-            genres=request.genres,
-            mood_keywords=request.mood_keywords,
-            limit_per_source=request.limit_per_source,
-        )
-
-        # Cache results
-        discovery.cache_discovery(request.station, tracks)
-
-        sources_used = list(set(t.source.value for t in tracks))
-
-        return DiscoveryResponse(
-            station=request.station,
-            total_found=len(tracks),
-            tracks=[t.to_dict() for t in tracks],
-            sources_used=sources_used,
-        )
-    except Exception as e:
-        logger.error(f"Discovery error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/discovery/cached/{station}")
-async def get_cached_discovery(
-    station: str,
-    discovery: DiscoveryService = Depends(get_discovery),
-):
-    """Get previously cached discovery results for a station."""
-    if station not in ("pew-hits-english", "pew-hits-desi"):
-        raise HTTPException(status_code=400, detail="Invalid station")
-    tracks = discovery.get_cached_discovery(station)
-    if tracks is None:
-        return {"station": station, "cached": False, "tracks": []}
-    return {
-        "station": station,
-        "cached": True,
-        "tracks": [t.to_dict() for t in tracks],
-    }
-
-
-from pathlib import Path
