@@ -104,7 +104,7 @@ async def lifespan(app: FastAPI):
         NVIDIAClient(
             api_key=nvidia_api_key,
             base_url=os.environ.get("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1"),
-            rpm_limit=int(os.environ.get("NVIDIA_RPM_LIMIT", "40")),
+            rate_limit_rpm=int(os.environ.get("NVIDIA_RPM_LIMIT", "40")),
         )
         logger.info("NVIDIA client initialized")
     else:
