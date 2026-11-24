@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -79,9 +80,9 @@ class AudioAnalyzer:
         self._classifiers: dict[str, Any] = {}
         self._models_loaded = False
         
-        # Model paths
-        self.openl3_path = self.models_dir / "openl3_music_mel256_emb512.onnx"
-        self.efficientat_path = self.models_dir / "efficientat_mn10_as.onnx"
+        # Model paths (configurable via environment variables)
+        self.openl3_path = Path(os.environ.get("OPENL3_MODEL_PATH", str(self.models_dir / "openl3_music_mel256_emb512.onnx")))
+        self.efficientat_path = Path(os.environ.get("EFFICIENTAT_MODEL_PATH", str(self.models_dir / "efficientat_mn10_as.onnx")))
         self.classifier_dir = self.models_dir / "classifiers"
         
     def load_models(self) -> bool:
