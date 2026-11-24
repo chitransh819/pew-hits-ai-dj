@@ -59,21 +59,21 @@ class CacheEventHandler(FileSystemEventHandler):
         canonical_id = f"track:cache:{self._sanitize_filename(path.stem)}"
         logger.info(f"[CACHE_SYNC] File created: {canonical_id}")
         # Schedule analysis
-        asyncio.create_task(self.analyze_callback(path, canonical_id))
-    
+        asyncio.run_coroutine_threadsafe(self.analyze_callback(path, canonical_id), self._loop)
+
     def _handle_deleted(self, file_path: str):
         path = Path(file_path)
         canonical_id = f"track:cache:{self._sanitize_filename(path.stem)}"
         logger.warning(f"[CACHE_SYNC] File deleted: {canonical_id}")
         # Mark as evicted in database
-        asyncio.create_task(self.db.update_cache_status(canonical_id, "evicted"))
-    
+        asyncio.run_coroutine_threadsafe(self.db.update_cache_status(canonical_id, "evicted"), self._loop)
+
     def _handle_modified(self, file_path: str):
         path = Path(file_path)
         canonical_id = f"track:cache:{self._sanitize_filename(path.stem)}"
         logger.info(f"[CACHE_SYNC] File modified: {canonical_id}")
         # Re-analyze
-        asyncio.create_task(self.analyze_callback(path, canonical_id, force=True))
+        asyncio.run_coroutine_threadsafe(self.analyze_callback(path, canonical_id, force=True), self._loop)
     
     @staticmethod
     def _sanitize_filename(filename: str) -> str:
@@ -84,29 +84,31 @@ class CacheEventHandler(FileSystemEventHandler):
 
 class CacheSyncService:
     """Main cache synchronization service"""
-    
+
     def __init__(
-        self, 
-        db: Database, 
-        cache_dirs: list[Path],
+        self,
+        db: Database,
+        cache_dirs: List[Path],
         analyzer,
         worker,
-        reconcile_interval: int = 300  # 5 minutes
+        reconcile_interval: int = 300,  # 5 minutes
     ):
         self.db = db
         self.cache_dirs = cache_dirs
         self.analyzer = analyzer
         self.worker = worker
         self.reconcile_interval = reconcile_interval
-        
+
         self.observer = Observer()
         self._running = False
         self._reconcile_task = None
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
     
     async def start(self):
         """Start the cache sync service"""
         self._running = True
-        
+        self._loop = asyncio.get_running_loop()
+
         # 1. Initial reconciliation
         logger.info("[CACHE_SYNC] Starting initial reconciliation...")
         await self.reconcile_all()
