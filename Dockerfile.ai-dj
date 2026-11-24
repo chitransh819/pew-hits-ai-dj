@@ -17,21 +17,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Set working directory
 WORKDIR /app
 
-# Copy requirements first for better caching
-COPY tech-stack.yaml /tmp/tech-stack.yaml
-
-# Generate requirements.txt from tech-stack.yaml
-RUN python3 -c "
-import yaml
-with open('/tmp/tech-stack.yaml') as f:
-    data = yaml.safe_load(f)
-deps = data.get('dependencies', {})
-for pkg, ver in deps.items():
-    if ver:
-        print(f'{pkg}=={ver}')
-    else:
-        print(pkg)
-" > requirements.txt
+# Copy requirements.txt for better caching
+COPY requirements.txt .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
