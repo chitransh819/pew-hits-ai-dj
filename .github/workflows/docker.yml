@@ -17,9 +17,6 @@ jobs:
       - name: 📦 Checkout repository
         uses: actions/checkout@v4
 
-      - name: ⚙️ Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
       - name: 🛠️ Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -39,7 +36,6 @@ jobs:
             ghcr.io/chitransh819/pew-hits-ai-dj:latest
             ghcr.io/chitransh819/pew-hits-ai-dj:${{ github.sha }}
           file: ./Dockerfile.ai-dj
-          platforms: linux/arm64
 
       - name: ✅ Build Status
         run: |
