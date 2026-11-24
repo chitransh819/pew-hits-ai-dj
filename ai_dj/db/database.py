@@ -255,3 +255,16 @@ class Database:
                 (station_id, canonical_id, score, source, datetime.utcnow().isoformat()),
             )
             await conn.commit()
+
+    async def update_cache_status(
+        self,
+        canonical_id: str,
+        status: str,
+    ):
+        async with aiosqlite.connect(self.db_path) as conn:
+            await conn.execute(
+                """UPDATE track_identity SET cache_filename = ?
+                   WHERE canonical_id = ?""",
+                (status, canonical_id),
+            )
+            await conn.commit()
