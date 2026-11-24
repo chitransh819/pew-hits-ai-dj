@@ -39,8 +39,7 @@ jobs:
             ghcr.io/chitransh819/pew-hits-ai-dj:latest
             ghcr.io/chitransh819/pew-hits-ai-dj:${{ github.sha }}
           file: ./Dockerfile.ai-dj
-          cache-from: type=registry,ref=ghcr.io/chitransh819/pew-hits-ai-dj:cache
-          cache-to: type=registry,ref=ghcr.io/chitransh819/pew-hits-ai-dj:cache,mode=max
+          platforms: linux/arm64
 
       - name: ✅ Build Status
         run: |
