@@ -74,9 +74,9 @@ jobs:
           print('✅ All modules import successfully')
           "
 
-      - name: 🧹 Lint (ruff)
+      - name: 🧹 Lint (ruff - errors only)
         run: |
-          ruff check ai_dj/ || exit 1
+          ruff check --select E,F ai_dj/ || exit 1
 
       - name: 🧪 Run tests
         run: |

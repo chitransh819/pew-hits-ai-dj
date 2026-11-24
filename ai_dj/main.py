@@ -5,25 +5,27 @@ Initializes all components and starts the FastAPI server
 
 import asyncio
 import logging
-import signal
-import sys
 import os
-from pathlib import Path
+import signal
 from contextlib import asynccontextmanager
-from typing import Optional, Dict, List
+from pathlib import Path
 
-from fastapi import FastAPI, Request, HTTPException
+import uvicorn
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
-import uvicorn
 
+from ai_dj.analysis.analyzer import AnalysisWorker, AudioAnalyzer
+from ai_dj.api.routes import router, set_dependencies
 from ai_dj.db.database import Database
-from ai_dj.analysis.analyzer import AudioAnalyzer, AnalysisWorker
-from ai_dj.recommendation.engine import RecommendationEngine, NVIDIAClient, create_engine_from_config
+from ai_dj.recommendation.engine import (
+    NVIDIAClient,
+    RecommendationEngine,
+    create_engine_from_config,
+)
 from ai_dj.services.cache_sync import create_cache_sync_service
 from ai_dj.services.discovery import DiscoveryService
 from ai_dj.services.spotify_client import SpotifyClient
-from ai_dj.api.routes import router, set_dependencies
 
 # Configure logging
 logging.basicConfig(
@@ -39,8 +41,8 @@ _engines: dict[str, RecommendationEngine] = {}
 _analyzer: AudioAnalyzer = None
 _worker: AnalysisWorker = None
 _cache_sync = None
-_discovery: Optional[DiscoveryService] = None
-_spotify: Optional[SpotifyClient] = None
+_discovery: DiscoveryService | None = None
+_spotify: SpotifyClient | None = None
 
 
 @asynccontextmanager
@@ -193,7 +195,7 @@ async def load_station_profiles(db: Database):
             await db.upsert_station_profile(profile)
 
 
-async def load_station_profiles_from_db(db: Database) -> Dict[str, Dict]:
+async def load_station_profiles_from_db(db: Database) -> dict[str, dict]:
     """Load station profiles from database"""
     profiles = {}
     for station_id in ["pew-hits-english", "pew-hits-desi"]:
@@ -204,7 +206,7 @@ async def load_station_profiles_from_db(db: Database) -> Dict[str, Dict]:
 
 
 async def run_initial_analysis(analyzer: AudioAnalyzer, worker: AnalysisWorker, 
-                                db: Database, cache_dirs: List[Path]):
+                                db: Database, cache_dirs: list[Path]):
     """Run initial analysis of all cached tracks"""
     logger.info("[INITIAL_ANALYSIS] Starting...")
     
