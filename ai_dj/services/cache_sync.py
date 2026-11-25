@@ -26,7 +26,12 @@ logger = logging.getLogger(__name__)
 class CacheEventHandler(FileSystemEventHandler):
     """Handles file system events for cache directories"""
     
-    def __init__(self, db: Database, analyze_callback: Callable[[Path, str], Awaitable[None]], loop: asyncio.AbstractEventLoop):
+    def __init__(
+        self,
+        db: Database,
+        analyze_callback: Callable[[Path, str], Awaitable[None]],
+        loop: asyncio.AbstractEventLoop,
+    ):
         self.db = db
         self.analyze_callback = analyze_callback
         self._loop = loop
