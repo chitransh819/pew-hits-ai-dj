@@ -26,9 +26,10 @@ logger = logging.getLogger(__name__)
 class CacheEventHandler(FileSystemEventHandler):
     """Handles file system events for cache directories"""
     
-    def __init__(self, db: Database, analyze_callback: Callable[[Path, str], Awaitable[None]]):
+    def __init__(self, db: Database, analyze_callback: Callable[[Path, str], Awaitable[None]], loop: asyncio.AbstractEventLoop):
         self.db = db
         self.analyze_callback = analyze_callback
+        self._loop = loop
         self._pending_deletes = set()
         self._pending_creates = set()
     
@@ -118,8 +119,9 @@ class CacheSyncService:
         for cache_dir in self.cache_dirs:
             cache_dir.mkdir(parents=True, exist_ok=True)
             handler = CacheEventHandler(
-                self.db, 
-                self._analyze_file_callback
+                self.db,
+                self._analyze_file_callback,
+                loop=self._loop,
             )
             self.observer.schedule(handler, str(cache_dir), recursive=False)
             logger.info(f"[CACHE_SYNC] Watching: {cache_dir}")
