@@ -80,13 +80,18 @@ class AudioAnalyzer:
         self._classifiers: dict[str, Any] = {}
         self._models_loaded = False
         
-        # Model paths (configurable via environment variables)
-        self.openl3_path = Path(
-            os.environ.get("OPENL3_MODEL_PATH", str(self.models_dir / "openl3_music_mel256_emb512.onnx"))
-        )
-        self.efficientat_path = Path(
-            os.environ.get("EFFICIENTAT_MODEL_PATH", str(self.models_dir / "efficientat_mn10_as.onnx"))
-        )
+        # Model paths (configurable via environment variables, comma-separated for fallback)
+        openl3_paths_str = os.environ.get("OPENL3_MODEL_PATHS", "")
+        openl3_default = str(self.models_dir / "openl3_music_mel256_emb512.onnx")
+        self.openl3_paths = [
+            Path(p.strip()) for p in openl3_paths_str.split(",") if p.strip()
+        ] or [Path(openl3_default)]
+
+        efficientat_paths_str = os.environ.get("EFFICIENTAT_MODEL_PATHS", "")
+        efficientat_default = str(self.models_dir / "efficientat_mn10_as.onnx")
+        self.efficientat_paths = [
+            Path(p.strip()) for p in efficientat_paths_str.split(",") if p.strip()
+        ] or [Path(efficientat_default)]
         self.classifier_dir = self.models_dir / "classifiers"
         
     def load_models(self) -> bool:
@@ -103,29 +108,45 @@ class AudioAnalyzer:
             return False
     
     def _load_openl3(self) -> ort.InferenceSession | None:
-        """Load OpenL3 ONNX model"""
+        """Load OpenL3 ONNX model, try multiple paths if one fails."""
         if self._openl3_session is None:
-            if not self.openl3_path.exists():
-                logger.warning(f"OpenL3 model not found at {self.openl3_path}")
-                return None
-            self._openl3_session = ort.InferenceSession(
-                str(self.openl3_path), 
-                providers=['CPUExecutionProvider']
-            )
-            logger.info("OpenL3 model loaded")
+            for model_path in self.openl3_paths:
+                if not model_path.exists():
+                    logger.warning(f"OpenL3 model not found at {model_path}")
+                    continue
+                try:
+                    self._openl3_session = ort.InferenceSession(
+                        str(model_path),
+                        providers=['CPUExecutionProvider']
+                    )
+                    logger.info(f"OpenL3 model loaded: {model_path}")
+                    return self._openl3_session
+                except Exception as e:
+                    logger.warning(f"Failed to load OpenL3 model {model_path}: {e}")
+                    continue
+            logger.warning("No OpenL3 model could be loaded from any path")
+            return None
         return self._openl3_session
-    
+
     def _load_efficientat(self) -> ort.InferenceSession | None:
-        """Load EfficientAT ONNX model"""
+        """Load EfficientAT ONNX model, try multiple paths if one fails."""
         if self._efficientat_session is None:
-            if not self.efficientat_path.exists():
-                logger.warning(f"EfficientAT model not found at {self.efficientat_path}")
-                return None
-            self._efficientat_session = ort.InferenceSession(
-                str(self.efficientat_path),
-                providers=['CPUExecutionProvider']
-            )
-            logger.info("EfficientAT model loaded")
+            for model_path in self.efficientat_paths:
+                if not model_path.exists():
+                    logger.warning(f"EfficientAT model not found at {model_path}")
+                    continue
+                try:
+                    self._efficientat_session = ort.InferenceSession(
+                        str(model_path),
+                        providers=['CPUExecutionProvider']
+                    )
+                    logger.info(f"EfficientAT model loaded: {model_path}")
+                    return self._efficientat_session
+                except Exception as e:
+                    logger.warning(f"Failed to load EfficientAT model {model_path}: {e}")
+                    continue
+            logger.warning("No EfficientAT model could be loaded from any path")
+            return None
         return self._efficientat_session
     
     def _load_classifiers(self):
